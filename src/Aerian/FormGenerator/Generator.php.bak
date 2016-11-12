@@ -1,0 +1,742 @@
+<?php
+
+namespace Aerian\Form;
+
+use Aerian\Form\Form;
+
+use Aerian\Database\Eloquent\Model;
+//use Aerian\Form\FieldGenerator\EloquentModel as EloquentModelFieldGenerator;
+use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Types\StringType;
+use Kris\LaravelFormBuilder\FormBuilder as FormBuilder;
+use Kris\LaravelFormBuilder\Fields\FormField;
+
+//@todo cache
+//@todo submit
+//@todo adaptor for field generation
+//@todo validation - required
+//@todo validation - unique
+//@todo validation - by type
+//@todo default values / model form binding
+
+class Generator
+{
+    /**
+     * Form instance
+     * @var Form
+     */
+    protected $_form;
+
+    /**
+     * Base base to use
+     * @var Model
+     */
+    protected $_model = null;
+
+    /**
+     * Array of columns, in order, to display to form
+     * @var array
+     */
+    protected $_columns = null;
+
+    /**
+     *
+     * Array of columns to exclude from the form
+     * @var array
+     */
+    protected $_excludedColumns = [];
+
+    /**
+     * Defaults values, columns name = key name
+     * @var array
+     */
+    protected $_defaults = null;
+
+    /**
+     * Sets if to autoinclude a submit button
+     * @var Boolean
+     */
+    protected $_autoIncludeSubmit = false;
+
+    /**
+     * Used to cache generated forms
+     * @var Zend_Cache_Frontend
+    protected $_cache;
+     */
+
+    /**
+     * @var string
+    protected $_cacheKeyPrefix = 'form';
+     */
+
+    /**
+     * Construct the generator, using either a db table or row
+     * @param  Aerian_Db_Table_Row or Aerian_Db_Table $definition
+     * @throws Aerian_Exception_Form
+     */
+    public function __construct($model)
+    {
+        //set table, and row if supplied
+        /*if ($model instanceof Aerian_Db_Table_Row_RowAbstract) {
+            $this->_model = $model->getTable();
+        } elseif ($definition instanceOf Aerian_Db_Table_TableAbstract) {*/
+            $this->_model = $model;/*
+        } else {
+            throw new Zend_Exception("Please supply a table or row object");
+        }*/
+    }
+
+    /**
+     * Generates the form, after the generator has been constructed
+     * @return Aerian_Form
+     */
+    public function generateForm()
+    {
+        /*
+        $cache = $this->getCache();
+        $cachable = $cache && $this->_cacheKeyPrefix;
+        $form = false;
+
+        if ($cachable) {
+            $cacheKey = $this->_getFormCacheKey();
+            $form = $cache->load($cacheKey);
+        }
+        */
+
+
+        //if ($form === false || !$cachable || !$this->_model->isFormCachable()) {
+
+            $form = $this->getForm();
+                //array('csrfToken' => $this->_model->getFormRequiresCSRFTokens())
+
+            /*foreach ($model->describe() as $column) {
+                $field = $form->_generateField($column);
+                if ($field) {
+                    $form->addField($field);
+                }*/
+
+
+            /**
+             * @var $column Column
+             */
+            foreach ($this->getColumns() as $column) {
+                if ($this->_excludeColumn($column)) {
+                    continue;
+                }
+
+                if ($column->getType() instanceof StringType) {
+                    $form->add($column->getName(), 'text');
+                }
+
+                //@todo column heading map
+                //$this->_columns[$this->_model->getHeadingForColumn($column->getName())] = $column;
+
+                //normal element
+                /*
+                if ($column instanceof Zend_Form_Element) {
+                    if ($column->getLabel() == "") {
+                        $column->setLabel($this->_model->getHeadingForColumn($column->getName()));
+                    }
+
+                    $field = $column;
+
+                    //generate it by column meta
+                } else {
+                    //skip any columns which are managed by the db
+                }*/
+
+
+                    //default value
+                    //todo - set value (with laravel model form binding?
+                /*
+                    if (isset($this->_defaults[$field->getId()])) {
+                        $field->setValue($this->_defaults[$field->getId()]);
+                    }
+                */
+            }
+
+        /*
+            //include submit button
+            if ($this->_autoIncludeSubmit) {
+                self::addDefaultSubmitButtons($form);
+            }
+
+            if ($cachable) {
+                $cache->save($form, $cacheKey);
+            }
+        */
+
+        //}
+
+        return $form;
+    }
+
+    /**
+     * Get columns
+     * @return array $columns
+     */
+    public function getColumns()
+    {
+        if ($this->_columns === null) {
+            $this->_columns = $this->_model->describe();
+        }
+
+        return $this->_columns;
+    }
+
+    /**
+     * Set columns
+     * @param  array                     $columns
+     * @return Aerian_Form_FormGenerator for chaining
+    public function setColumns(array $columns)
+    {
+        $metaColumns    = $this->_model->info(Zend_Db_Table_Abstract::METADATA);
+        $this->_columns = array();
+        foreach ($columns as $key => $column) {
+            //add raw element
+            if ($column instanceof Zend_Form_Element) {
+                $this->_columns[$key] = $column;
+            }
+            //add it by column meta
+            else {
+                if (isset($metaColumns[$column]))
+                    $this->_columns[$key] = $metaColumns[$column];
+            }
+        }
+
+        return $this;
+    }
+     */
+
+    /**
+     * Set excluded columns
+     * @param  array                     $columns
+     * @return Aerian_Form_FormGenerator for chaining
+     */
+    public function setExcludedColumns(array $columns)
+    {
+        $this->_excludedColumns = $columns;
+
+        return $this;
+    }
+
+    /**
+     * Get excluded columns
+     * @return array
+     */
+    public function getExcludedColumns()
+    {
+        return $this->_excludedColumns;
+    }
+
+
+    /**
+     * @param Column $column
+     */
+    protected function _excludeColumn(Column $column)
+    {
+        if (in_array($column->getName(), $this->getExcludedColumns())) {
+            return true;
+        } elseif ($column->getAutoincrement()) {
+            return true;
+        //@todo skip timestamps
+        } elseif ($column->getType() instanceof \Foobar) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Add column
+     * @param  mixed                     $column
+     * @return Aerian_Form_FormGenerator for chaining
+    public function addColumn($column)
+    {
+        $this->_columns[] = $column;
+
+        return $this;
+    }
+     */
+
+    /**
+     * Remove column
+     * @param String $column (key)
+    public function removeColumn($column)
+    {
+        unset($this->_columns[$column]);
+    }
+     */
+
+    /**
+     * Get default values
+     * @return array $defaults
+     */
+    public function getDefaults()
+    {
+        return $this->_defaults;
+    }
+
+    /**
+     * Set default values
+     * @param  array                     $defaults (key = element id => value)
+     * @return Aerian_Form_FormGenerator fro chaining
+     */
+    public function setDefaults(array $defaults)
+    {
+        $this->_defaults = $defaults;
+
+        return $this;
+    }
+
+    /**
+     * Get if to include a submit button
+     * @return boolean $autoIncludeSubmit
+     */
+    public function getAutoIncludeSubmit()
+    {
+        return $this->_autoIncludeSubmit;
+    }
+
+    /**
+     * Set if to include a submit button
+     * @param  boolean $autoIncludeSubmit
+     * @return Aerian_Form_FormGenerator
+     */
+    public function setAutoIncludeSubmit($autoIncludeSubmit)
+    {
+        $this->_autoIncludeSubmit = $autoIncludeSubmit;
+
+        return $this;
+    }
+
+    /**
+     * @param \Aerian\Form\Form $form
+     * @param Column $column
+     * @return \Aerian\Form\Form
+     */
+    protected function _addField(Form $form, Column $column)
+    {
+        if ($column->getType() instanceof StringType) {
+            $form->add($column->getName(), 'text');
+            return $form;
+        }
+        //temp
+        return $form;
+
+        $columnName = $column->getName();
+
+        /*
+         * This asks the table to provide its own column if it wants to, otherwise we continue to standard element
+         * generation.
+         */
+        $element = $this->_table->getElementForColumn($columnName, $columnMeta);
+        if ($element) {
+            return $element;
+        }
+
+        /*
+         * FOREIGN KEY DROPDOWN
+         * If this column name exists in the reference map,
+         * treat it as a foriegn key and render a dropdown/radio group to select the value
+         * @author Simon Neaves
+         *
+         * @author Tom Hicks
+         * For whatever reason this actually always produced a select element. So I've improved this
+         * to use the table's getSelectElement (maybe needs renaming to something like getForeignKeyChooseElement)
+         * because the table might not want to return all of those items, or might want to order them
+         * in a certain way, and the foreign table should be allowed to inform these decisions, rather than
+         * just doing 'fetchAll'.
+         */
+        $reference = $this->_table->getReferenceByColumnName($columnName);
+        if ($reference) {
+            $refTable = $reference['refTableClass']::getInstance();
+            $element = $refTable->getSelectElement($columnName, $this->_table);
+            $element->class = $element->class . ' column_' . $columnName . ' reference_' . $reference['refTableClass'];
+        } else {
+            switch ($columnMeta["DATA_TYPE"]) {
+                //ints (and meduim ints)
+                case "int" :
+                case "mediumint" :
+                    $element   = new Zend_Form_Element_Text($columnName);
+                    $validator = new Zend_Validate_Int();
+                    $element->addValidator($validator);
+                    break;
+                case "smallint":
+                    $element   = new Zend_Form_Element_Select($columnName);
+
+                    $element->addMultiOption(null); //makes the first item the 'nothing selected' option
+                    $element->setAttrib('data-placeholder', 'Select...');
+                    for ($i = 0; $i <= 1000; $i++) {
+                        $element->addMultiOption($i, $i);
+                    }
+                    $validator = new Zend_Validate_Int();
+                    $element->addValidator($validator);
+                    break;
+                //tinyints
+                case "tinyint":
+                    if ($columnMeta["LENGTH"] == 1) {
+                        $element = new Zend_Form_Element_Checkbox($columnName);
+                        break;
+                    } else {
+                        $element = new Zend_Form_Element_Select($columnName);
+                        for ($i = 0; $i <= 100; $i++) {
+                            $element->addMultiOption($i, $i);
+                        }
+                        break;
+                    }
+                //chars / varchars
+                case "char":
+                case "varchar":
+                    if (strtolower(substr($columnName, 0, 8)) == "password") {
+                        $element   = new Zend_Form_Element_Password($columnName);
+                        $validator = new Zend_Validate_StringLength(array("max" => $columnMeta["LENGTH"]));
+                        $validator->setMessage("Value length must be less than " . $columnMeta["LENGTH"] . " characters");
+                        $element->addValidator($validator, false);
+                        //$filter = new Aerian_Filter_Sha1();//todo-aerian-urgent review salting etc. on passwords
+                        //$element->addFilter($filter);
+                    } elseif (strtolower($columnName) == "email") {
+                        $element   = new Zend_Form_Element_Text($columnName);
+                        $validator = new Aerian_Validate_EmailAddress();
+                        $element->addValidator($validator, false);
+                    } elseif (strtolower($columnName) == "postcode") {
+                        $element   = new Aerian_Form_Element_Postcode($columnName);
+                    } elseif (strtolower(substr($columnName, 0, 8)) == "filename") {
+                        $element = new Zend_Form_Element_File($columnName);
+                    } elseif (strtolower($columnName) == "slug") {
+                        $element = new Zend_Form_Element_Text($columnName);
+                        $filter  = new Aerian_Filter_Slug();
+                        $element->addFilter($filter);
+                        $element->class = 'input-xxlarge';
+                        $options = array('table' => 'document', 'field' => 'slug');
+                        $validator = new Zend_Validate_Db_NoRecordExists($options);
+                    } elseif ($columnMeta["LENGTH"] >= 500) {
+                        $element   = new Zend_Form_Element_Textarea($columnName);
+                        $element->setAttrib("rows", "3");
+                        $element->class = 'input-xxlarge';
+                        $validator = new Zend_Validate_StringLength(array("max" => $columnMeta["LENGTH"]));
+                        $validator->setMessage("Value length must be less than " . $columnMeta["LENGTH"] . " characters");
+                        $element->addValidator($validator, false);
+                    } elseif ($columnMeta["LENGTH"] >= 50) {
+                        $element   = new Zend_Form_Element_Text($columnName);
+                        $element->class = 'input-xxlarge';
+                        $validator = new Zend_Validate_StringLength(array("max" => $columnMeta["LENGTH"]));
+                        $validator->setMessage("Value length must be less than " . $columnMeta["LENGTH"] . " characters");
+                        $element->addValidator($validator, false);
+                    } else {
+                        $element   = new Zend_Form_Element_Text($columnName);
+                        $validator = new Zend_Validate_StringLength(array("max"      => $columnMeta["LENGTH"]));
+                        $validator->setMessage("Value length must be less than " . $columnMeta["LENGTH"] . " characters");
+                        $element->addValidator($validator, false);
+                    }
+                    $element->setAttrib('maxlength', $columnMeta['LENGTH']);
+                    $element->setAttrib("class", $element->getAttrib('class') . " aerian");
+                    break;
+                //text
+                case "text":
+                    $element   = new Aerian_Form_Element_Tinymce($columnName);
+                    break;
+                case "longtext":
+                    $element   = new Zend_Form_Element_Textarea($columnName);
+                    $element->setAttrib("rows", "3");
+                    $element->class = 'input-xxlarge';
+                    break;
+                //decimal (money)
+                case "decimal":
+                    $element   = new Zend_Form_Element_Text($columnName);
+                    $validator = new Zend_Validate_Regex("/^[\d]*.\d\d$/");
+                    $validator->setMessage("Price must be in the format 00.00");
+                    $element->addValidator($validator, false);
+                    //there was probably a reason for this line?
+                    //hope not was breaking things - removed it - jt
+                    //$element->setAttrib("id", time() . rand(100000, 999999));
+                    break;
+                case "float":
+                    $element   = new Zend_Form_Element_Text($columnName);
+                    $validator = new Zend_Validate_Regex("/^[\d]*[.]?[\d]*?$/");
+                    $validator->setMessage("Please enter a valid number");
+                    $element->addValidator($validator, false);
+                    break;
+                //date/time
+                case "date":
+                    $element   = new Aerian_Form_Element_DatePicker($columnName);
+                    $element->addFilter(new Aerian_Filter_DateToNull());
+                    $config = Zend_Registry::get('config');
+                    if (isset($config->dateFormat->php->short)) {
+                        $element->setDateFormat($config->dateFormat->php->short);
+                    }
+                    break;
+                case "timestamp":
+                case "datetime":
+                    $element   = new Aerian_Form_Element_DatePicker($columnName);
+                    $element->setIncludeTime(true);
+                    $config = Zend_Registry::get('config');
+                    if (isset($config->dateFormat->php->dateTime)) {
+                        $element->setDateFormat($config->dateFormat->php->dateTime);
+                    }
+                    break;
+                case "time":
+                    $element   = new Aerian_Form_Element_TimePicker($columnName);
+                    break;
+                default:
+                    if(strtolower(substr($columnMeta["DATA_TYPE"], 0, 4)) == "enum") {
+                        $element   = new Zend_Form_Element_Select($columnName);
+                        $enumValues = $this->_getEnumValues($columnMeta["DATA_TYPE"]);
+                        if ($columnMeta['NULLABLE']) {
+                            $element->addMultiOption('null', 'N/A');
+                        }
+                        for ($i = 0; $i < count($enumValues); $i++) {
+                            $element->addMultiOption($enumValues[$i], $this->getEnumTitle($enumValues[$i]));
+                        }
+                    } else {
+                        $element   = new Zend_Form_Element_Text($columnName);
+                    }
+            }
+        }
+
+        if (!is_numeric($columnKey)) {
+            $label = $columnKey;
+        } else {
+            $label = $this->_table->getHeadingForColumn($columnName);
+        }
+        $element->setLabel($label);
+
+        //add some extra options to the element from the database config.
+        self::addElementDescriptionForMeta($element, $columnMeta);
+        self::addElementRequiredForMeta($element, $columnMeta);
+        self::addElementUniqueForMeta($element, $columnMeta);
+
+        return $element;
+    }
+
+    /**
+     * Helper function to set an element's description based on its column meta.
+     * @param Zend_Form_Element $element
+     * @param array             $columnMeta
+    public static function addElementDescriptionForMeta(Zend_Form_Element $element, array $columnMeta)
+    {
+        if ($columnMeta["COMMENTS"]) {
+            $element->setDescription($columnMeta["COMMENTS"]);
+        }
+    }
+     */
+
+    /**
+     * Helper function to set an element's required-ness based on its column meta.
+     * @param Zend_Form_Element $element
+     * @param array             $columnMeta
+     */
+    public static function addElementRequiredForMeta(Zend_Form_Element $element, array $columnMeta)
+    {
+        if (!$columnMeta["NULLABLE"]) {
+            $element->setRequired(true);
+            $validator = new Zend_Validate_NotEmpty();
+            $validator->setMessage($element->getLabel() . " is required");
+            $element->addValidator($validator, true);
+        }
+    }
+
+    /**
+     * Helper function to set an element's uniqueness based on its column meta.
+     * @param Zend_Form_Element $element
+     * @param array             $columnMeta
+     */
+    public static function addElementUniqueForMeta(Zend_Form_Element $element, array $columnMeta)
+    {
+        if ($columnMeta["UNIQUE"] == true) {
+            $validator = new Zend_Validate_Db_NoRecordExists($columnMeta["TABLE_NAME"], $columnMeta["COLUMN_NAME"]);
+            $element->addValidator($validator, true);
+        }
+    }
+
+    /**
+     * Lazily instantiates the default form type, if necessary.
+     *
+     * @return Form
+     */
+    public function getForm()
+    {
+        if (!$this->_form) {
+            $this->_form =  app()->make(FormBuilder::class)->create(Form::class, [
+                'method' => 'POST',
+                'url' => route('song.store')
+            ]);
+        }
+
+        return $this->_form;
+    }
+
+
+    /**
+     * @todo test this
+     * Allows you to pass a custom form to add elements to.
+     * A unique identifier for the supplied form before generation
+     * Ensures the form cache key is probably generated and avoid cache collision
+     * If set to NULL caching will not occur.
+     *
+     * @param  Zend_Form                $form
+     * @param  string                   $cacheKeyPrefix
+     * @return \Aerian_Form_Generator
+     * @throws InvalidArgumentException
+    public function setForm(Zend_Form $form, $cacheKeyPrefix = null)
+    {
+        if (!is_string($cacheKeyPrefix) && $cacheKeyPrefix !== null) {
+            throw new InvalidArgumentException('cacheKeyPrefix must be a string');
+        }
+        $this->_form = $form;
+        $this->_cacheKeyPrefix = $cacheKeyPrefix;
+
+        return $this;
+    }
+     */
+
+    /**
+     *
+     * @param  type Zend_Form $form
+     * @return Zend_Form
+     * @deprecated (The method name is wrongly camel cased, so I have just created the
+     *                             proper method name and proxy to this.
+     */
+    public static function addsubmitButton(Zend_Form $form)
+    {
+        return self::addDefaultSubmitButtons($form);
+    }
+
+    /**
+     *
+     * @param  Zend_Form $form
+     * @return Zend_Form
+     *
+     */
+    public static function addDefaultSubmitButton(Zend_Form $form)
+    {
+        $submit = new Zend_Form_Element_Submit('save');
+        $submit->setLabel('Save changes')
+            ->class = 'btn-primary';
+        $form->addElement($submit);
+        $submit->removeDecorator('HtmlTag');
+        $submit->removeDecorator('totalWrapper');
+
+        $form->addDisplayGroup(array('save'), 'actions');
+        $form->getDisplayGroup('actions')->setAttrib('class', 'form-actions')->setOrder(999);
+        $form->getDisplayGroup('actions')->removeDecorator('HtmlTag');
+        $form->getDisplayGroup('actions')->removeDecorator('DtDdWrapper');
+
+        return $form;
+    }
+
+    /**
+     *
+     * @param  Zend_Form $form
+     * @return Zend_Form
+     */
+    public static function addDefaultSubmitButtons(Zend_Form $form, $context = null)
+    {
+        $submit = new Zend_Form_Element_Submit('save');
+        $submit->setLabel('Save')
+            ->class = 'btn-primary';
+        $form->addElement($submit);
+        $submit->removeDecorator('HtmlTag');
+        $submit->removeDecorator('totalWrapper');
+
+        $submitnext = new Zend_Form_Element_Submit('savenext');
+        $submitnext->setLabel('Save & Next');
+        if ($context && $context == Aerian_Crud_Controller_Action::CONTEXT_ADD) {
+            $submitnext->setLabel('Save & Add Another');
+        }
+        $form->addElement($submitnext);
+        $submitnext->removeDecorator('HtmlTag');
+        $submitnext->removeDecorator('totalWrapper');
+
+        if (isset($_SERVER['HTTP_REFERER'])) {
+
+            $cancel = new Zend_Form_Element_Submit('cancel');
+            $cancel->setLabel('Cancel');
+            $form->addElement($cancel);
+            $cancel->removeDecorator('HtmlTag');
+            $cancel->removeDecorator('totalWrapper');
+
+        }
+
+        $form->addDisplayGroup(array('save','savenext', 'cancel'), 'actions');
+        $form->getDisplayGroup('actions')->setAttrib('class', 'form-actions')->setOrder(9999);
+        $form->getDisplayGroup('actions')->removeDecorator('HtmlTag');
+        $form->getDisplayGroup('actions')->removeDecorator('DtDdWrapper');
+
+        return $form;
+    }
+
+    /**
+     * Gets the cache frontend or returns false if not set
+     * @return Zend_Cache_Core
+    public function getCache()
+    {
+        if (!$this->_cache) {
+            $this->_cache = Zend_Registry::get('cache');
+        }
+
+        return $this->_cache;
+    }
+     */
+
+    /**
+     * Sets the cache frontend
+     * @param  Zend_Cache_Core       $cache
+     * @return Aerian_Form_Generator
+    public function setCache(Zend_Cache_Core $cache)
+    {
+        $this->_cache = $cache;
+
+        return this;
+    }
+     */
+
+    /**
+     * Returns key used to cache and retreive form
+     * @return string
+    protected function _getFormCacheKey()
+    {
+        return $this->_cacheKeyPrefix . '_' . md5(get_class($this->_model) . serialize($this->_columns) . serialize($this->_excludedColumns) . serialize($this->_autoIncludeSubmit) . serialize($this->_defaults));
+    }
+     */
+
+    /**
+     * Function to get enum values and return them as an array
+     * @param enum from db
+     */
+    protected function _getEnumValues( $enum )
+    {
+        preg_match("/^enum\(\'(.*)\'\)$/", $enum, $matches);
+        $enumValues = explode("','", $matches[1]);
+        return $enumValues;
+    }
+
+    /**
+     * Function to convert enum values to readable titles
+     *
+     */
+    protected function getEnumTitle( $enumValue )
+    {
+        $enumTitle = ucwords(str_replace('_', ' ', $enumValue));
+        return $enumTitle;
+    }
+
+    /*
+    public static function applyUniqueValidatorExclusions(Aerian_Db_Table_Row_RowAbstract $persistedRow, Aerian_Form $form)
+    {
+        $table = $persistedRow->getTable();
+        $tablePrimary = $table->getPrimary();
+
+        if ($persistedRow->$tablePrimary !== null) {
+            foreach ($form->getElements() as $element) {
+                foreach ($element->getValidators() as $validator) {
+                    if ($validator instanceof Zend_Validate_Db_NoRecordExists) {
+                        $validator->setExclude(array('field' => $tablePrimary, 'value' => $persistedRow->$tablePrimary));
+                    }
+                }
+            }
+        }
+    }
+    */
+
+}
