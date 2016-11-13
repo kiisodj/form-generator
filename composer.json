@@ -12,7 +12,7 @@
     ],
     "require": {
         "php": ">=5.4.0",
-        "aerian/database": "dev-master",
+        "aerian/database": "dev-master#dde717c4777a2c5e2b4396ee05eb29bb7a53033e",
         "kris/laravel-form-builder": "^1.7"
     },
     "require-dev": {
